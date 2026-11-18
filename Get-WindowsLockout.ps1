@@ -1349,6 +1349,7 @@ if (-not $sids -or $sids.Count -eq 0) {
     # ======= LSA Logon Sessions (klist) =======
     Write-Host ("  [{0}] LogonSessions..." -f $Computer)
     try {
+        $NewLine = [Environment]::NewLine
         $KlistOutput = Invoke-RemoteCmdWmi `
             -ComputerName $Computer `
             -CommandLine "klist sessions" `
@@ -1357,28 +1358,40 @@ if (-not $sids -or $sids.Count -eq 0) {
             "\\{0}\s" -f [regex]::Escape($UserName)
         $MatchingSessions = @($KlistOutput -split "`r?`n" |
             Where-Object { $_ -match $SessionPattern })
+
+        $QueryUserFailed = $false
         $QueryUserOutput = try {
             Get-InteractiveSessionsTextWmi `
                 -ComputerName $Computer
-        } catch { "query user failed" }
-        $NewLine = [Environment]::NewLine
+        } catch {
+            $QueryUserFailed = $true
+            "query user failed: $($_.Exception.Message)"
+        }
+        $UserPattern =
+            "\b$([regex]::Escape($UserName))\b"
+        $QueryUserMatches = @($QueryUserOutput -split "`r?`n" |
+            Where-Object { $_ -match $UserPattern })
+
+        $SectionHtml = ''
         if ($MatchingSessions.Count -gt 0) {
-            $Detail.LogonSessions =
+            $SectionHtml +=
                 "<p><strong>$($MatchingSessions.Count) LSA " +
                 "session(s) for $UserName.</strong> " +
-                "If not listed in query user below, " +
-                "they are orphaned and retry " +
-                "Kerberos with a stale password " +
+                "If not listed in query user, they " +
+                "are orphaned and retry Kerberos " +
+                "with a stale password " +
                 "(reboot to clear).</p>" +
-                "<pre>$($MatchingSessions -join $NewLine)" +
-                "</pre><h4>query user</h4>" +
-                "<pre>$QueryUserOutput</pre>"
-        } else {
-            $Detail.LogonSessions =
-                "<p>No LSA sessions for $UserName.</p>" +
-                "<h4>query user</h4>" +
-                "<pre>$QueryUserOutput</pre>"
+                "<pre>$($MatchingSessions -join $NewLine)</pre>"
         }
+        if ($QueryUserMatches.Count -gt 0) {
+            $SectionHtml +=
+                "<h4>query user</h4>" +
+                "<pre>$($QueryUserMatches -join $NewLine)</pre>"
+        }
+        if ($QueryUserFailed) {
+            $SectionHtml += "<p>$QueryUserOutput</p>"
+        }
+        $Detail.LogonSessions = $SectionHtml
     } catch {
         $Detail.LogonSessions =
             "<p>klist failed: " +
@@ -1651,6 +1664,8 @@ if ($DeviceDetails -and $DeviceDetails.Count -gt 0) {
             [PSCustomObject]@{ Title='Startup Items';            Content=$Detail.StartupItems }
             [PSCustomObject]@{ Title='LSA Logon Sessions (klist)'; Content = $Detail.LogonSessions }
         )) {
+            if (-not $Sec.Content -and
+                $Sec.Title -like 'LSA*') { continue }
             $body = if ($Sec.Content) { $Sec.Content } else { "<p class='hint'>No data returned.</p>" }
             $HtmlBody += "<div class='section'><h3>$($Sec.Title)</h3>$body</div>`n"
         }
