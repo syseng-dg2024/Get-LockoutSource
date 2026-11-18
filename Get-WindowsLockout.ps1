@@ -804,7 +804,7 @@ Write-Host "  NPS parse complete: $($AllNPSRaw.Count) raw entries."
 Write-Host "`n[Phase 5] Building unified dataset..."
 $UnifiedRows = [System.Collections.Generic.List[object]]::new()
 
-# == DC Events â†’ Unified =====================================================
+# == DC Events Unified =====================================================
 foreach ($Ev in $AllDCEvents) {
     $eid = [int]$Ev.EventId
     $lt  = "$($Ev.LogonType)"
@@ -939,6 +939,51 @@ Write-Host "  Unified CSV: $($UnifiedRows.Count) rows ($($AllDCEvents.Count) DC 
 # ==============================================================================
 #  Phase 6: Device Analysis
 # ==============================================================================
+
+# ======= Session sweep (all servers) =======
+Write-Host "`n[Phase 5b] Sweeping servers for sessions..."
+
+$SweepServerNames = @($AllServers | ForEach-Object {
+    if ($_ -is [string]) { $_ } else { $_.Name }
+})
+
+$SweepScriptBlock = {
+    param($SweepUserName)
+    $SessionPattern =
+        "\\$([regex]::Escape($SweepUserName))\s"
+    $MatchingSessions = @(klist sessions 2>$null |
+        Where-Object { $_ -match $SessionPattern })
+    if ($MatchingSessions.Count) {
+        [PSCustomObject]@{
+            Server       = $env:COMPUTERNAME
+            SessionCount = $MatchingSessions.Count
+        }
+    }
+}
+
+$SweepResults = Invoke-Command `
+    -ComputerName $SweepServerNames `
+    -ScriptBlock $SweepScriptBlock `
+    -ArgumentList $UserName `
+    -ThrottleLimit 32 `
+    -ErrorAction SilentlyContinue `
+    -ErrorVariable SweepErrors
+
+foreach ($SweepResult in $SweepResults) {
+    $ServerName = $SweepResult.Server.ToUpper()
+    Write-Host ("  + (Session) $ServerName " +
+        "($($SweepResult.SessionCount))")
+    if (-not $TargetComputers.Contains($ServerName)) {
+        $TargetComputers.Add($ServerName)
+    }
+}
+
+$UnreachableServers = @($SweepErrors.TargetObject |
+    Sort-Object -Unique)
+if ($UnreachableServers.Count) {
+    Write-Warning ("  Sweep unreachable: " +
+        ($UnreachableServers -join ', '))
+}
 
 Write-Host ("`n[Phase 6] Device analysis on {0} target(s)..." -f $TargetComputers.Count)
 
@@ -1304,31 +1349,35 @@ if (-not $sids -or $sids.Count -eq 0) {
     # ======= LSA Logon Sessions (klist) =======
     Write-Host ("  [{0}] LogonSessions..." -f $Computer)
     try {
-        $kl = Invoke-RemoteCmdWmi `
+        $KlistOutput = Invoke-RemoteCmdWmi `
             -ComputerName $Computer `
             -CommandLine "klist sessions" `
             -TimeoutSec 30
-        $pat  = "\\{0}\s" -f [regex]::Escape($UserName)
-        $hits = @($kl -split "`r?`n" |
-                  Where-Object { $_ -match $pat })
-        if ($hits.Count -gt 0) {
-            $qu = try {
-                Get-InteractiveSessionsTextWmi `
-                    -ComputerName $Computer
-            } catch { "query user failed" }
-            $nl = [Environment]::NewLine
+        $SessionPattern =
+            "\\{0}\s" -f [regex]::Escape($UserName)
+        $MatchingSessions = @($KlistOutput -split "`r?`n" |
+            Where-Object { $_ -match $SessionPattern })
+        $QueryUserOutput = try {
+            Get-InteractiveSessionsTextWmi `
+                -ComputerName $Computer
+        } catch { "query user failed" }
+        $NewLine = [Environment]::NewLine
+        if ($MatchingSessions.Count -gt 0) {
             $Detail.LogonSessions =
-                "<p><strong>$($hits.Count) LSA " +
+                "<p><strong>$($MatchingSessions.Count) LSA " +
                 "session(s) for $UserName.</strong> " +
                 "If not listed in query user below, " +
                 "they are orphaned and retry " +
                 "Kerberos with a stale password " +
                 "(reboot to clear).</p>" +
-                "<pre>$($hits -join $nl)</pre>" +
-                "<h4>query user</h4><pre>$qu</pre>"
+                "<pre>$($MatchingSessions -join $NewLine)" +
+                "</pre><h4>query user</h4>" +
+                "<pre>$QueryUserOutput</pre>"
         } else {
             $Detail.LogonSessions =
-                "<p>No LSA sessions for $UserName.</p>"
+                "<p>No LSA sessions for $UserName.</p>" +
+                "<h4>query user</h4>" +
+                "<pre>$QueryUserOutput</pre>"
         }
     } catch {
         $Detail.LogonSessions =
@@ -1337,6 +1386,7 @@ if (-not $sids -or $sids.Count -eq 0) {
     }
 
     $DeviceDetails.Add($Detail)
+
 }
 
 
