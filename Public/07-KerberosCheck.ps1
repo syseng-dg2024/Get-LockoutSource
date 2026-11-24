@@ -27,7 +27,7 @@ if ($ActiveLockout) {
             continue
         }
         Write-Host "`n[Phase 2b] $($Recent.Count) DC-local failures in the last $KerbRecentMinutes min on $KDC - running Kerberos correlator ($KerbSeconds s)..." -ForegroundColor Yellow
-        $Kc = Invoke-KerbCorrelator -User $UserName -Seconds $KerbSeconds -OutDir $TempPath -NoOpen
+        $Kc = Invoke-KerbCorrelator -User $UserName -Seconds $KerbSeconds -OutDir $ReportPath -NoOpen
         $KerbResults.Add($Kc)
         if ($Kc.TopCaller -and $Kc.TopCaller.Score -ge 40) {
             $n = if ($Kc.TopCaller.Hostname) { $Kc.TopCaller.Hostname.TrimEnd('.').Split('.')[0].ToUpper() } else { $Kc.TopCaller.IP }

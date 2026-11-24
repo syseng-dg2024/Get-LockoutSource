@@ -32,7 +32,7 @@ if (-not $UserName) {
     $DatePickerStart.ShowUpDown   = $true
     $DatePickerStart.Location     = New-Object System.Drawing.Point(160,54)
     $DatePickerStart.Size         = New-Object System.Drawing.Size(250,22)
-    $DatePickerStart.Value        = (Get-Date).AddHours(-$HoursBack)
+    $DatePickerStart.Value        = $StartDate
 
     $LabelEnd              = New-Object System.Windows.Forms.Label
     $LabelEnd.Text         = 'End Date / Time:'
@@ -45,7 +45,7 @@ if (-not $UserName) {
     $DatePickerEnd.ShowUpDown   = $true
     $DatePickerEnd.Location     = New-Object System.Drawing.Point(160,92)
     $DatePickerEnd.Size         = New-Object System.Drawing.Size(250,22)
-    $DatePickerEnd.Value        = (Get-Date).AddHours($HoursForward)
+    $DatePickerEnd.Value        = $EndDate
 
     $OKButton              = New-Object System.Windows.Forms.Button
     $OKButton.Text         = 'OK'
@@ -70,16 +70,14 @@ if (-not $UserName) {
     $StartDate = $DatePickerStart.Value
     $EndDate   = $DatePickerEnd.Value
     $ActiveLockout = [switch]$ActiveBox.Checked
-} else {
-    if (-not $StartDate) { $StartDate = (Get-Date).AddHours(-$HoursBack) }
-    if (-not $EndDate)   { $EndDate   = (Get-Date).AddHours($HoursForward) }
 }
+
 $DateStamp = Get-Date -Format 'yyyyMMdd_HHmmss'
 
-if (-not (Test-Path $TempPath)) { New-Item -ItemType Directory -Path $TempPath | Out-Null }
+if (-not (Test-Path $ReportPath)) { New-Item -ItemType Directory -Path $ReportPath | Out-Null }
 #Export a CSV
-#$UnifiedOutputPath = Join-Path $TempPath "LockoutAnalysis_${UserName}_${DateStamp}.csv"
-$DeviceOutputPath  = Join-Path $TempPath "LockoutReport_${UserName}_${DateStamp}.html"
+#$UnifiedOutputPath = Join-Path $ReportPath "LockoutAnalysis_${UserName}_${DateStamp}.csv"
+$DeviceOutputPath  = Join-Path $ReportPath "LockoutReport_${UserName}_${DateStamp}.html"
 
 $ScriptStart = Get-Date
 Write-Host "Script Started:  $($ScriptStart.ToString('MM/dd/yyyy hh:mm:ss tt'))"

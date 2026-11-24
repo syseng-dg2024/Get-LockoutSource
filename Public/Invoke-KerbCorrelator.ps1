@@ -249,7 +249,7 @@
     .bar{height:8px;background:#26314a;border-radius:4px;min-width:120px}.bar i{display:block;height:8px;border-radius:4px;background:var(--ac)}
     .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;background:#26314a}.pill.bad{background:#5a2730;color:#ffb3b3}
     details{background:var(--card);border:1px solid var(--line);border-radius:10px;margin:8px 0;padding:8px 12px}summary{cursor:pointer;font-weight:600}
-    '@
+'@
     A "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Kerberos Correlator - $(E $User)</title><style>$css</style></head><body><div class='wrap'>"
     A "<h1>Kerberos Failure Correlator</h1><div class='sub'>Account <b>$(E $User)</b> on <b>$(E $env:COMPUTERNAME)</b> &middot; $(E $T0.ToString('yyyy-MM-dd HH:mm:ss')) to $(E $T1.ToString('HH:mm:ss')) &middot; window &plusmn;$WindowMs ms</div>"
     A "<div class='grid'>"
@@ -309,6 +309,6 @@
     Write-Host "CSV     : $CsvOut"
     if (-not $NoOpen) { Start-Process $Html }
 
-    [pscustomobject]@{ User=$User; Failures=$Fails.Count; Verdict=$Verdict; Tone=$Tone
+    [PSCustomObject]@{ User=$User; Failures=$Fails.Count; Verdict=$Verdict; Tone=$Tone
         TopCaller=$TopCaller; TopProcess=$Top; ReportPath=$Html; CsvPath=$CsvOut }
 }
